@@ -36,7 +36,7 @@ export interface DayPlan {
 export interface Activity {
   time: string
   description: string
-  location?: Location
+  location?: Location | string
   notes?: string
 }
 
@@ -94,4 +94,3 @@ export const getTrip = async (tripId: string) => {
 
   return { id: tripDoc.id, ...tripData } as Trip
 }
-

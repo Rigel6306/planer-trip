@@ -8,6 +8,16 @@ import type { Location } from "@/lib/db-service"
 // Initialize Mapbox access token
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || ""
 
+type DirectionsResponse = {
+  routes?: Array<{
+    geometry?: {
+      type: "LineString"
+      coordinates: number[][]
+    }
+  }>
+  message?: string
+}
+
 interface MapboxMapProps {
   startLocation: Location | null
   endLocation: Location | null
@@ -18,10 +28,16 @@ export function MapboxMap({ startLocation, endLocation }: MapboxMapProps) {
   const map = useRef<mapboxgl.Map | null>(null)
   const markersRef = useRef<mapboxgl.Marker[]>([])
   const [mapInitialized, setMapInitialized] = useState(false)
+  const [mapError, setMapError] = useState<string | null>(null)
 
   // Initialize map
   useEffect(() => {
     if (map.current || !mapContainer.current) return
+
+    if (!mapboxgl.accessToken) {
+      setMapError("Map unavailable: configure NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN and restart the app.")
+      return
+    }
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
@@ -36,6 +52,11 @@ export function MapboxMap({ startLocation, endLocation }: MapboxMapProps) {
     // Set map as initialized when it's loaded
     map.current.on("load", () => {
       setMapInitialized(true)
+    })
+
+    map.current.on("error", (event) => {
+      console.error("Mapbox map error:", event.error)
+      setMapError("Map tiles could not be loaded. Check your Mapbox token, its allowed URLs, and network access.")
     })
 
     // Clean up on unmount
@@ -128,18 +149,18 @@ export function MapboxMap({ startLocation, endLocation }: MapboxMapProps) {
       const query = await fetch(
         `https://api.mapbox.com/directions/v5/mapbox/driving/${start[0]},${start[1]};${end[0]},${end[1]}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`,
       )
-      const json = await query.json()
-      const data = json.routes[0]
+      if (!query.ok) {
+        throw new Error(`Directions request failed with status ${query.status}`)
+      }
 
-      // Safety check for map instance
-      if (!map) {
-        console.error("Map instance is undefined")
-        return
+      const json = (await query.json()) as DirectionsResponse
+      const data = json.routes?.[0]
+      if (!data?.geometry) {
+        throw new Error(json.message || "Directions response did not contain a route")
       }
 
       // Safety check to ensure map is loaded
       if (!map.loaded()) {
-        console.log("Map not fully loaded yet, waiting...")
         map.once("load", () => {
           addRouteToMap(map, data)
         })
@@ -153,7 +174,7 @@ export function MapboxMap({ startLocation, endLocation }: MapboxMapProps) {
   }
 
   // Separate function to add route to map
-  function addRouteToMap(map: mapboxgl.Map, data: any) {
+  function addRouteToMap(map: mapboxgl.Map, data: NonNullable<DirectionsResponse["routes"]>[number]) {
     try {
       // Safety check - only proceed if we have route data
       if (!data || !data.geometry) {
@@ -201,5 +222,16 @@ export function MapboxMap({ startLocation, endLocation }: MapboxMapProps) {
     }
   }
 
-  return <div ref={mapContainer} className="h-full w-full" />
+  return (
+    <div ref={mapContainer} className="relative h-full w-full">
+      {mapError && (
+        <div
+          role="alert"
+          className="absolute bottom-3 left-3 right-3 z-10 rounded-md border border-destructive/30 bg-background/95 p-3 text-center text-sm text-destructive shadow"
+        >
+          {mapError}
+        </div>
+      )}
+    </div>
+  )
 }

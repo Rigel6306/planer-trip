@@ -74,10 +74,7 @@ export function TripDetails({ trip }: TripDetailsProps) {
     if (!activity) return
 
     if (field === "location") {
-      activity.location =
-        typeof activity.location === "object" && activity.location !== null
-          ? { ...activity.location, name: value }
-          : { name: value }
+      activity.location = value
     } else if (field === "description") {
       activity.description = value
     } else {
@@ -187,11 +184,12 @@ export function TripDetails({ trip }: TripDetailsProps) {
                                 <CardTitle className="text-sm font-medium">
                                   {activity.time}
                                 </CardTitle>
-                                {typeof activity.location === "object" &&
-                                  activity.location?.name && (
+                                {activity.location && (
                                     <div className="flex items-center text-xs text-muted-foreground">
                                       <MapPin className="h-3 w-3 mr-1" />
-                                      {activity.location.name}
+                                      {typeof activity.location === "string"
+                                        ? activity.location
+                                        : activity.location.name}
                                     </div>
                                   )}
                               </div>
